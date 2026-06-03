@@ -1,5 +1,8 @@
+from generateurJSON import run_simulator
+
+
 def main():
-    print("Hello from spark!")
+    run_simulator()
 
 
 if __name__ == "__main__":
