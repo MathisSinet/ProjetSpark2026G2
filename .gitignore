@@ -1,4 +1,5 @@
 streaming_data/
+.sdkmanrc
 
 # Python-generated files
 __pycache__/
