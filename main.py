@@ -4,6 +4,7 @@ from spark_core import spark_core
 from threading import Thread
 from multiprocessing import Process
 from time import sleep
+from dashboard import run_dashboard
 
 
 def main():
@@ -18,10 +19,7 @@ def main():
 
     print("END")
 
-from dashboard import run_dashboard
-import time
-
-if __name__ == "__main__":
+def main2():
     print("Démarrage global du projet LeBonCoin...")
     print("-------------------------------------------")
     
@@ -33,7 +31,7 @@ if __name__ == "__main__":
     process_generateur.start()
     
     # Petite pause d'une seconde pour laisser le générateur créer les premiers JSON
-    time.sleep(1)
+    sleep(1)
     
     # 3. On lance le dashboard
     process_dashboard.start()
@@ -52,3 +50,7 @@ if __name__ == "__main__":
         process_generateur.terminate()
         process_dashboard.terminate()
         print("Fin du programme.")
+
+
+if __name__ == "__main__":
+    main2()
