@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dash>=4.2.0",
+    "dash-cytoscape>=1.0.2",
     "numpy>=2.4.6",
     "pyspark>=4.1.1",
 ]
