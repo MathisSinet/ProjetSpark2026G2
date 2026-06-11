@@ -22,7 +22,7 @@ from dashboard import run_dashboard
 import time
 
 if __name__ == "__main__":
-    print("🚀 Démarrage global du projet LeBonCoin...")
+    print("Démarrage global du projet LeBonCoin...")
     print("-------------------------------------------")
     
     # 1. On prépare nos deux travailleurs (Process)
@@ -38,8 +38,8 @@ if __name__ == "__main__":
     # 3. On lance le dashboard
     process_dashboard.start()
     
-    print("\n✅ TOUT EST LANCÉ !")
-    print("🌐 Dashboard accessible sur : http://127.0.0.1:8050/")
+    print("\nTOUT EST LANCÉ !")
+    print("Dashboard accessible sur : http://127.0.0.1:8050/")
     print("Appuyez sur CTRL+C pour tout arrêter.\n")
     
     try:
@@ -47,8 +47,8 @@ if __name__ == "__main__":
         process_generateur.join()
         process_dashboard.join()
     except KeyboardInterrupt:
-        # Si tu fais CTRL+C, on coupe tout proprement
-        print("\n🛑 Arrêt d'urgence demandé...")
+        # CTRL+C, on coupe tout proprement
+        print("\nArrêt d'urgence demandé...")
         process_generateur.terminate()
         process_dashboard.terminate()
         print("Fin du programme.")
