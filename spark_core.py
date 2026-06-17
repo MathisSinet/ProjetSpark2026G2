@@ -24,6 +24,7 @@ spark = (
     SparkSession.builder
         .appName("SparkProjectG2")
         .master("local[*]")
+        .config("spark.jars.packages", "graphframes:graphframes:0.8.3-spark3.5-s_2.12")
         .config("spark.executor.memory", "2g")
         .config("spark.driver.memory", "1g")
         .config("spark.sql.shuffle.partitions", "8")

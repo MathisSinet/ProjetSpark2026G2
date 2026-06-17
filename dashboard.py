@@ -5,6 +5,10 @@ import random
 
 from style_graphe import mon_style_cytoscape
 
+import json
+import os
+
+
 app = dash.Dash(__name__)
 
 initial_elements = [
@@ -44,7 +48,7 @@ app.layout = html.Div([
     )
 ], style={'backgroundColor': '#ECF0F1', 'minHeight': '100vh', 'padding': '20px', 'margin': '-8px'})
 
-
+'''
 @app.callback(
     Output('live-graph-leboncoin', 'elements'),
     Input('interval-clock', 'n_intervals'),
@@ -76,7 +80,24 @@ def refresh_graph_automatically(n, existing_elements):
     existing_elements.extend(new_edges)
     
     return existing_elements
+'''
 
+@app.callback(
+        Output('live-graph-leboncoin', 'elements'),
+        Input('interval-clock', 'n_intervals')
+)
+def refresh_graph_automatically(n):
+
+    if os.path.exists("graph_data.json"):
+        try:
+            with open("graph_data.json", 'r', encoding='utf-8') as f:
+                vrais_elements = json.load(f)
+                if vrais_elements :
+                    return vrais_elements
+        except Exception:
+            pass
+    
+    return initial_elements
 
 def run_dashboard():
     app.run(debug=False)

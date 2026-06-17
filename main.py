@@ -5,8 +5,11 @@ from threading import Thread
 from multiprocessing import Process
 from time import sleep
 from dashboard import run_dashboard
+from graph_master import start_spark_graph
 
 
+
+'''
 def main():
     generator = Process(target = run_simulator)
     spark = Thread(target = spark_core, args=(30,))
@@ -54,3 +57,40 @@ def main2():
 
 if __name__ == "__main__":
     main2()
+
+'''
+
+def main():
+    print("Démarrage global du projet LeBonCoin...")
+    print("-------------------------------------------")
+
+    process_generateur = Process(target=run_simulator)
+    process_spark = Process(target=start_spark_graph)
+    process_dashboard = Process(target=run_dashboard)
+
+    process_generateur.start()
+    sleep(2)
+
+    process_spark.start()
+    sleep(2)
+
+    process_dashboard.start()
+
+    print("\nTOUT EST LANCÉ !")
+    print("Dashboard accessible sur : http://127.0.0.1:8050/")
+    print("Appuyez sur CTRL+C pour tout arrêter.\n")
+
+
+    try:
+        process_generateur.join()
+        process_spark.join()
+        process_dashboard.join()
+    except KeyboardInterrupt:
+        print("\nArrêt d'urgence demandé...")
+        process_generateur.terminate()
+        process_spark.terminate()
+        process_dashboard.terminate()
+        print("Fin du programme.")
+
+if __name__ == "__main__":
+    main()
