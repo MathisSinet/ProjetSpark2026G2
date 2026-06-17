@@ -5,7 +5,6 @@ from threading import Thread
 from multiprocessing import Process
 from time import sleep
 from dashboard import run_dashboard
-from graph_master import start_spark_graph
 
 
 
@@ -65,7 +64,7 @@ def main():
     print("-------------------------------------------")
 
     process_generateur = Process(target=run_simulator)
-    process_spark = Process(target=start_spark_graph)
+    process_spark = Process(target=spark_core, args=(None,))
     process_dashboard = Process(target=run_dashboard)
 
     process_generateur.start()

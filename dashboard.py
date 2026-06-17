@@ -91,11 +91,11 @@ def refresh_graph_automatically(n):
     if os.path.exists("graph_data.json"):
         try:
             with open("graph_data.json", 'r', encoding='utf-8') as f:
-                vrais_elements = json.load(f)
-                if vrais_elements :
-                    return vrais_elements
-        except Exception:
-            pass
+                data = json.load(f)
+                if data :
+                    return data
+        except Exception as e:
+            print(f"Erreur lecture du fichier: {e}")
     
     return initial_elements
 
