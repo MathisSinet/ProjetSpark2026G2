@@ -141,7 +141,7 @@ def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
             .collect()
         )
 
-        window_summary: list[dict[str, Any]] = []
+        windows: list[dict[str, Any]] = []
         actions_by_window: dict[tuple[str, str], dict[str, Any]] = {}
 
         for row in window_rows:
@@ -150,33 +150,22 @@ def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
             action_type = row["action_type"]
             count = row["count"]
 
-            window_summary.append({
-                "window_start": window_start,
-                "window_end": window_end,
-                "action_type": action_type,
-                "count": count,
-            })
-
             window_key = (window_start, window_end)
             if window_key not in actions_by_window:
                 actions_by_window[window_key] = {
                     "window_start": window_start,
                     "window_end": window_end,
-                    "action_counts": {},
+                    "actions": {},
                     "total_actions": 0,
                 }
 
-            actions_by_window[window_key]["action_counts"][action_type] = count
+            actions_by_window[window_key]["actions"][action_type] = count
             actions_by_window[window_key]["total_actions"] += count
 
-        window_totals = [
-            actions_by_window[key]
-            for key in sorted(actions_by_window)
-        ]
+        windows = [actions_by_window[key] for key in sorted(actions_by_window)]
 
         payload = {
-            "window_summary": window_summary,
-            "window_totals": window_totals,
+            "windows": windows,
             "window_duration": WINDOW_DURATION,
             "watermark_delay": WATERMARK_DELAY,
         }

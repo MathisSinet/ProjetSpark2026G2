@@ -48,7 +48,7 @@ def run_simulator():
             
             if event_count % 10 == 0:
                 print(f"[{event['timestamp']}] {event_count} événements générés - Dernier : {event['user_id']} a fait {event['action_type']} sur {event['product_id']}")
-            time.sleep(random.uniform(0.2, 1.5))
+            time.sleep(random.uniform(0.3, 1.5))
             
     except KeyboardInterrupt:
         print(f"\nArrêt manuel du simulateur. Total généré : {event_count} événements.")
