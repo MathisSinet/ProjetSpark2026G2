@@ -1,17 +1,17 @@
-from pyspark.sql import SparkSession
+from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql.types import StructType, StructField, TimestampType, StringType, DoubleType
 import pyspark.sql.functions as F
-from multiprocessing import queues
+from queue import Queue
 from threading import Thread
 import time
+from typing import Any
 
 from graphframes import GraphFrame
 
 OUTPUT_DIR = "streaming_data"
 
-g = None
-graph_queue: queues.Queue | None = None
+graph: GraphFrame | None = None
 
 SCHEMA = StructType([
     StructField("timestamp", TimestampType(), False),
@@ -45,9 +45,9 @@ df = (
 )
 
 
-def make_process_batch_graph(output_queue):
-    def process_batch_graph(batch_df, batch_id):
-        global g
+def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
+    def process_batch_graph(batch_df: DataFrame, batch_id: int):
+        global graph
 
         if batch_df.isEmpty():
             return
@@ -65,21 +65,26 @@ def make_process_batch_graph(output_queue):
 
         new_edges = edges_user_prod.union(edges_seller_prod).distinct()
 
-        if g is None:
-            g = GraphFrame(new_vertices, new_edges)
+        if graph is None:
+            graph = GraphFrame(new_vertices, new_edges)
         else:
-            g = GraphFrame(
-                g.vertices.union(new_vertices).distinct(),
-                g.edges.union(new_edges).distinct()
+            vertices: DataFrame = graph.vertices
+            edges: DataFrame = graph.edges
+            graph = GraphFrame(
+                vertices.union(new_vertices).distinct(),
+                edges.union(new_edges).distinct()
             )
 
-        degrees_df = g.degrees
-        vertices_enriched = g.vertices.join(degrees_df, "id", "left").fillna(0, subset=["degree"])
+        vertices: DataFrame = graph.vertices
+        edges: DataFrame = graph.edges
+
+        degrees_df = graph.degrees
+        vertices_enriched = vertices.join(degrees_df, "id", "left").fillna(0, subset=["degree"])
 
         local_vertices = vertices_enriched.collect()
-        local_edges = g.edges.collect()
+        local_edges = edges.collect()
 
-        cytoscape_elements = []
+        cytoscape_elements: list[dict[str, Any]] = []
 
         for row in local_vertices:
             dynamic_size = 45 + (row["degree"] * 3)
@@ -123,13 +128,13 @@ def stop_query_after(delay: float, query: StreamingQuery):
     query.stop()
 
 
-def spark_core(delay: float | None = None, graph_state=None):
-    process_batch = make_process_batch_graph(graph_state)
+def spark_core(delay: float | None = None, queue: Queue[dict[str, Any]] | None = None):
+    process_batch = make_process_batch_graph(queue)
     writer = (
         df
         .withWatermark("timestamp", "10 minutes")
         .writeStream
-        .trigger(processingTime="5 seconds")
+        .trigger(processingTime="10 seconds")
         .foreachBatch(process_batch)
         .outputMode("update")
     )

@@ -1,15 +1,16 @@
 import dash
 from dash import html, dcc, Input, Output
 import dash_cytoscape as cyto
-from queue import Empty
+from queue import Empty, Queue
 from threading import Thread
+from typing import Any
 
 from style_graphe import mon_style_cytoscape
 
 
 app = dash.Dash(__name__)
-graph_queue = None
-cached_graph_elements = None
+graph_queue: Queue[dict[str, Any]] | None = None
+cached_graph_elements: list[dict[str, Any]] | None = None
 
 
 def watch_graph_queue():
@@ -20,11 +21,8 @@ def watch_graph_queue():
             return
 
         try:
-            print(">>> Getting from queue")
             latest_payload = graph_queue.get(timeout=1)
-            print(">>> got", latest_payload)
         except Empty:
-            print(">>> EMPTY!!!")
             continue
 
         if latest_payload and latest_payload.get("elements"):
@@ -62,7 +60,7 @@ app.layout = html.Div([
     
     dcc.Interval(
         id='interval-clock',
-        interval=5000, 
+        interval=10_000, 
         n_intervals=0
     )
 ], style={'backgroundColor': '#ECF0F1', 'minHeight': '100vh', 'padding': '20px', 'margin': '-8px'})
@@ -80,9 +78,9 @@ def refresh_graph_automatically(n):
 
     return initial_elements
 
-def run_dashboard(graph_state=None):
+def run_dashboard(queue: Queue[dict[str, Any]] | None = None):
     global graph_queue, cached_graph_elements
-    graph_queue = graph_state
+    graph_queue = queue
     cached_graph_elements = initial_elements
     if graph_queue is not None:
         Thread(target=watch_graph_queue, daemon=True).start()
