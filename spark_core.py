@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql.types import StructType, StructField, TimestampType, StringType, DoubleType
@@ -10,6 +12,9 @@ from typing import Any
 from graphframes import GraphFrame
 
 OUTPUT_DIR = "streaming_data"
+METRICS_JSON_PATH = Path("metrics.json")
+WINDOW_DURATION = "10 seconds"
+WATERMARK_DELAY = "30 seconds"
 
 graph: GraphFrame | None = None
 
@@ -123,26 +128,110 @@ def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
     return process_batch_graph
 
 
-def stop_query_after(delay: float, query: StreamingQuery):
+def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
+    def process_batch_window_stats(batch_df: DataFrame, batch_id: int):
+        if batch_df.isEmpty():
+            return
+
+        print(f"\n--- [Batch {batch_id}] Agrégation temporelle des interactions ---")
+
+        window_rows = (
+            batch_df
+            .orderBy("window", "action_type")
+            .collect()
+        )
+
+        window_summary: list[dict[str, Any]] = []
+        actions_by_window: dict[tuple[str, str], dict[str, Any]] = {}
+
+        for row in window_rows:
+            window_start = row["window"]["start"].isoformat()
+            window_end = row["window"]["end"].isoformat()
+            action_type = row["action_type"]
+            count = row["count"]
+
+            window_summary.append({
+                "window_start": window_start,
+                "window_end": window_end,
+                "action_type": action_type,
+                "count": count,
+            })
+
+            window_key = (window_start, window_end)
+            if window_key not in actions_by_window:
+                actions_by_window[window_key] = {
+                    "window_start": window_start,
+                    "window_end": window_end,
+                    "action_counts": {},
+                    "total_actions": 0,
+                }
+
+            actions_by_window[window_key]["action_counts"][action_type] = count
+            actions_by_window[window_key]["total_actions"] += count
+
+        window_totals = [
+            actions_by_window[key]
+            for key in sorted(actions_by_window)
+        ]
+
+        payload = {
+            "window_summary": window_summary,
+            "window_totals": window_totals,
+            "window_duration": WINDOW_DURATION,
+            "watermark_delay": WATERMARK_DELAY,
+        }
+
+        try:
+            METRICS_JSON_PATH.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            print(f"[WARN] Impossible d'écrire {METRICS_JSON_PATH}: {exc}")
+
+    return process_batch_window_stats
+
+
+def stop_queries_after(delay: float, queries: list[StreamingQuery]):
     time.sleep(delay)
-    query.stop()
+    for query in queries:
+        query.stop()
 
 
 def spark_core(delay: float | None = None, queue: Queue[dict[str, Any]] | None = None):
-    process_batch = make_process_batch_graph(queue)
-    writer = (
+    process_batch_graph = make_process_batch_graph(queue)
+    process_batch_window_stats = make_process_batch_window_stats(queue)
+
+    graph_writer = (
         df
-        .withWatermark("timestamp", "10 minutes")
         .writeStream
         .trigger(processingTime="10 seconds")
-        .foreachBatch(process_batch)
+        .foreachBatch(process_batch_graph)
+        .outputMode("append")
+    )
+
+    windowed_metrics = (
+        df
+        .withWatermark("timestamp", WATERMARK_DELAY)
+        .groupBy(F.window("timestamp", WINDOW_DURATION), F.col("action_type"))
+        .count()
+    )
+
+    metrics_writer = (
+        windowed_metrics
+        .writeStream
+        .trigger(processingTime="10 seconds")
+        .foreachBatch(process_batch_window_stats)
         .outputMode("update")
     )
-    query = writer.start()
+
+    graph_query = graph_writer.start()
+    metrics_query = metrics_writer.start()
+
     if delay:
-        t = Thread(target=stop_query_after, args=(delay, query))
+        t = Thread(target=stop_queries_after, args=(delay, [graph_query, metrics_query]))
         t.start()
-    query.awaitTermination()
+    spark.streams.awaitAnyTermination()
 
 
 if __name__ == "__main__":

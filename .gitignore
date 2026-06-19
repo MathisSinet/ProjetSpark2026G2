@@ -1,6 +1,7 @@
 streaming_data/
 graph_data*
 .sdkmanrc
+metrics.json
 
 # Python-generated files
 __pycache__/
