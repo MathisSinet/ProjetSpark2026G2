@@ -1,15 +1,34 @@
 import dash
 from dash import html, dcc, Input, Output
 import dash_cytoscape as cyto
-import random
+from queue import Empty
+from threading import Thread
 
 from style_graphe import mon_style_cytoscape
 
-import json
-import os
-
 
 app = dash.Dash(__name__)
+graph_queue = None
+cached_graph_elements = None
+
+
+def watch_graph_queue():
+    global cached_graph_elements
+
+    while True:
+        if graph_queue is None:
+            return
+
+        try:
+            print(">>> Getting from queue")
+            latest_payload = graph_queue.get(timeout=1)
+            print(">>> got", latest_payload)
+        except Empty:
+            print(">>> EMPTY!!!")
+            continue
+
+        if latest_payload and latest_payload.get("elements"):
+            cached_graph_elements = latest_payload["elements"]
 
 initial_elements = [
     {'data': {'id': 'usr_init', 'label': 'User_Init'}, 'classes': 'user'},
@@ -48,56 +67,23 @@ app.layout = html.Div([
     )
 ], style={'backgroundColor': '#ECF0F1', 'minHeight': '100vh', 'padding': '20px', 'margin': '-8px'})
 
-'''
-@app.callback(
-    Output('live-graph-leboncoin', 'elements'),
-    Input('interval-clock', 'n_intervals'),
-    Input('live-graph-leboncoin', 'elements')
-)
-def refresh_graph_automatically(n, existing_elements):
-    if n == 0:
-        return existing_elements
-
-    rand_id = random.randint(100, 999)
-    u_id = f"usr_{rand_id}"
-    s_id = f"sel_{rand_id}"
-    p_id = f"prod_{rand_id}"
-    
-    action_choisie = random.choice(["AIME", "VOUT", "ACHAT"])
-    
-    new_nodes = [
-        {'data': {'id': u_id, 'label': u_id}, 'classes': 'user'},
-        {'data': {'id': s_id, 'label': s_id}, 'classes': 'seller'},
-        {'data': {'id': p_id, 'label': p_id}, 'classes': 'product'}
-    ]
-    
-    new_edges = [
-        {'data': {'source': u_id, 'target': p_id, 'action': action_choisie}},
-        {'data': {'source': s_id, 'target': p_id, 'action': 'PROPOSE'}}
-    ]
-    
-    existing_elements.extend(new_nodes)
-    existing_elements.extend(new_edges)
-    
-    return existing_elements
-'''
 
 @app.callback(
         Output('live-graph-leboncoin', 'elements'),
         Input('interval-clock', 'n_intervals')
 )
 def refresh_graph_automatically(n):
+    global cached_graph_elements
 
-    if os.path.exists("graph_data.json"):
-        try:
-            with open("graph_data.json", 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                if data :
-                    return data
-        except Exception as e:
-            print(f"Erreur lecture du fichier: {e}")
-    
+    if cached_graph_elements:
+        return cached_graph_elements
+
     return initial_elements
 
-def run_dashboard():
+def run_dashboard(graph_state=None):
+    global graph_queue, cached_graph_elements
+    graph_queue = graph_state
+    cached_graph_elements = initial_elements
+    if graph_queue is not None:
+        Thread(target=watch_graph_queue, daemon=True).start()
     app.run(debug=False)
