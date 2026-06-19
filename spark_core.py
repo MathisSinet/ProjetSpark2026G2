@@ -91,7 +91,7 @@ def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
             cytoscape_elements.append({
                 "data": {
                     "id": row["id"],
-                    "label": f"{row['label']} (Global Deg: {row['degree']})",
+                    "label": f"{row['label']} (Deg: {row['degree']})",
                     "size": dynamic_size
                 },
                 "classes": row["type"]
