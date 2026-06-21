@@ -12,7 +12,7 @@ from typing import Any
 from graphframes import GraphFrame
 
 OUTPUT_DIR = "streaming_data"
-METRICS_JSON_PATH = Path("metrics.json")
+METRICS_DIR = Path("metrics")
 WINDOW_DURATION = "10 seconds"
 WATERMARK_DELAY = "30 seconds"
 
@@ -164,19 +164,25 @@ def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
 
         windows = [actions_by_window[key] for key in sorted(actions_by_window)]
 
-        payload = {
-            "windows": windows,
-            "window_duration": WINDOW_DURATION,
-            "watermark_delay": WATERMARK_DELAY,
-        }
-
         try:
-            METRICS_JSON_PATH.write_text(
-                json.dumps(payload, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            METRICS_DIR.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
-            print(f"[WARN] Impossible d'écrire {METRICS_JSON_PATH}: {exc}")
+            print(f"[WARN] Impossible de créer le dossier {METRICS_DIR}: {exc}")
+            return
+
+        for window_payload in windows:
+            # Deterministic name so each time window maps to one file.
+            safe_start = window_payload["window_start"].replace(":", "-")
+            safe_end = window_payload["window_end"].replace(":", "-")
+            file_path = METRICS_DIR / f"window_{safe_start}__{safe_end}.json"
+
+            try:
+                file_path.write_text(
+                    json.dumps(window_payload, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+            except Exception as exc:
+                print(f"[WARN] Impossible d'écrire {file_path}: {exc}")
 
     return process_batch_window_stats
 

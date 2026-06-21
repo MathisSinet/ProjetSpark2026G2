@@ -1,7 +1,10 @@
+# Generated elements
 streaming_data/
 graph_data*
-.sdkmanrc
-metrics.json
+metrics
+
+# Spark
+checkpoint_dir
 
 # Python-generated files
 __pycache__/
@@ -13,7 +16,7 @@ wheels/
 
 # Virtual environments
 .venv
+.sdkmanrc
 
 # VSCode
-
 .vscode
