@@ -1,61 +1,43 @@
-# How to use `uv`
+# 🚀 Projet PySpark Streaming & Graphes
 
-`uv` is an extremely fast Python package manager and environment tool.  
-It replaces tools like pip, pipx, virtualenv, and pyenv with a single unified workflow.
+Pipeline Big Data en temps réel pour analyser les interactions (clics, intentions d'achat, ventes) d'une plateforme style *LeBonCoin*. Les données sont traitées au fil de l'eau pour mettre à jour un graphe de relations.
 
-## Installation
+## 🛠️ Architecture
+`generator.py` (Flux JSON) ➡️ `spark_core.py` (Streaming + GraphFrames) ➡️ `dashboard.py` (Visualisation)
 
-### Linux & macOS
-curl -LsSf https://astral.sh/uv/install.sh | sh
+## 📂 Fichiers
+* `generateurJSON.py` : Simulateur de flux.
+* `spark_core.py` : Traitement Spark.
+* `dashboard.py` : Interface graphique.
+* `main.py` : Point d'entrée pour tout lancer.
 
-Restart your terminal so the `uv` command becomes available.
+---
 
-## Creating and Managing Environments
+## 🚀 Comment lancer le projet
 
-### Create a virtual environment
-uv venv
+1. **Installer uv** :
 
-### Activate the environment
-source .venv/bin/activate   # Linux/macOS  
-.venv\Scripts\activate      # Windows
+   ###### Linux & macOS
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+   Relancer le terminal pour que `uv` deviens disponible.
 
-## Managing Dependencies
+2. **Créer un environnement virtuel** :
+   ```bash
+   uv venv
+   ```
+3. **Activer l'environnement**
+   ###### Linux & macOS
+   ```bash
+   source .venv/bin/activate  .venv\Scripts\activate      # Windows
+   ```
+   ###### Windows
+   ```bash
+     .venv\Scripts\activate
+   ```
 
-### Add a dependency
-uv add requests
-
-### Add a dev dependency
-uv add --dev pytest
-
-### Remove a dependency
-uv remove requests
-
-### Sync dependencies (lockfile → environment)
-uv sync
-
-## Running Code With `uv`
-
-### Run a script inside the environment
-uv run script.py
-
-### Run a module
-uv run -m mypackage
-
-### Run a command with dependencies (no venv needed)
-uv run --with requests python script.py
-
-## Updating Dependencies
-
-### Upgrade a single dependency
-uv add --upgrade requests
-
-### Upgrade all dependencies
-uv sync --upgrade
-
-## Project Management
-
-### Initialize a new project
-uv init
-
-### Create a lockfile without installing
-uv lock
+4. **Lancer le programme**
+```bash
+   uv run main.py
+   ```
