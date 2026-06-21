@@ -7,7 +7,7 @@ from graphframes import GraphFrame
 import json
 import time
 from pathlib import Path
-from multiprocessing import Queue
+from queue import Queue
 from threading import Thread
 from typing import Any
 
