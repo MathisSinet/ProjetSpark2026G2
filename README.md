@@ -3,7 +3,7 @@
 Pipeline Big Data en temps réel pour analyser les interactions (clics, intentions d'achat, ventes) d'une plateforme style *LeBonCoin*. Les données sont traitées au fil de l'eau pour mettre à jour un graphe de relations.
 
 ## 🛠️ Architecture
-`generator.py` (Flux JSON) ➡️ `spark_core.py` (Streaming + GraphFrames) ➡️ `dashboard.py` (Visualisation)
+`generateurJSON.py` (Flux JSON) ➡️ `spark_core.py` (Streaming + GraphFrames) ➡️ `dashboard.py` (Visualisation)
 
 ## 📂 Fichiers
 * `generateurJSON.py` : Simulateur de flux.
