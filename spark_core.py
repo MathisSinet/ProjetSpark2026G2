@@ -1,23 +1,30 @@
-import json
-from pathlib import Path
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.streaming.query import StreamingQuery
 from pyspark.sql.types import StructType, StructField, TimestampType, StringType, DoubleType
 import pyspark.sql.functions as F
-from queue import Queue
-from threading import Thread
-import time
-from typing import Any
-
 from graphframes import GraphFrame
 
-OUTPUT_DIR = "streaming_data"
+import json
+import time
+from pathlib import Path
+from multiprocessing import Queue
+from threading import Thread
+from typing import Any
+
+
+
+# Dossier des données d'entrée
+DATA_DIR = "streaming_data"
+# Dossier des mesures de fenêtres
 METRICS_DIR = Path("metrics")
+# Durée des fenêtres
 WINDOW_DURATION = "10 seconds"
+# Délai à partir duquel Spark peut libérer des données pour le fenêtrage
 WATERMARK_DELAY = "30 seconds"
 
 graph: GraphFrame | None = None
 
+# Schéma des données
 SCHEMA = StructType([
     StructField("timestamp", TimestampType(), False),
     StructField("user_id", StringType(), False),
@@ -29,6 +36,7 @@ SCHEMA = StructType([
     StructField("price", DoubleType(), False)
 ])
 
+# Session spark
 spark = (
     SparkSession.builder
         .appName("SparkProjectG2_StatefulGraph")
@@ -40,18 +48,23 @@ spark = (
         .getOrCreate()
 )
 
-spark.sparkContext.setLogLevel("WARN")
+spark.sparkContext.setLogLevel("ERROR")
 spark.sparkContext.setCheckpointDir("checkpoint_dir")
 
+# Dataframe de lecture des données
 df = (
     spark.readStream
         .schema(SCHEMA)
-        .json(OUTPUT_DIR)
+        .json(DATA_DIR)
 )
 
 
 def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
+    """Retourne la fonction qui permet d'analyser un batch pour le graphe visuel"""
     def process_batch_graph(batch_df: DataFrame, batch_id: int):
+        """Fonction qui permet l'analyse d'un batch pour le graphe visuel.
+
+        Prend en paramètre le DataFrame du batch et l'id du batch"""
         global graph
 
         if batch_df.isEmpty():
@@ -59,17 +72,23 @@ def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
 
         print(f"\n--- [Batch {batch_id}] Mise à jour Incrémentale du GraphFrame ---")
 
+        # Mise à jour des utilisateurs, des produits et des vendeurs
         users = batch_df.select(F.col("user_id").alias("id"), F.col("user_id").alias("label")).distinct().withColumn("type", F.lit("user"))
         products = batch_df.select(F.col("product_id").alias("id"), F.col("product_id").alias("label")).distinct().withColumn("type", F.lit("product"))
         sellers = batch_df.select(F.col("seller_id").alias("id"), F.col("seller_id").alias("label")).distinct().withColumn("type", F.lit("seller"))
 
+        # Nouveaux sommets
         new_vertices = users.union(products).union(sellers).distinct()
 
+        # Arêtes entre les utilisateurs et les produits
         edges_user_prod = batch_df.select(F.col("user_id").alias("src"), F.col("product_id").alias("dst"), F.col("action_type").alias("action"))
+        # Arêtes entre les vendeurs et les produits
         edges_seller_prod = batch_df.select(F.col("seller_id").alias("src"), F.col("product_id").alias("dst")).withColumn("action", F.lit("PROPOSE"))
 
+        # Nouvelles arêtes
         new_edges = edges_user_prod.union(edges_seller_prod).distinct()
 
+        # Mise à jour du graphe
         if graph is None:
             graph = GraphFrame(new_vertices, new_edges)
         else:
@@ -83,12 +102,15 @@ def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
         vertices: DataFrame = graph.vertices
         edges: DataFrame = graph.edges
 
+        # Ajout du degré de chaque sommet
         degrees_df = graph.degrees
         vertices_enriched = vertices.join(degrees_df, "id", "left").fillna(0, subset=["degree"])
 
+        # Sommets et arêtes finales à envoyer au Dash
         local_vertices = vertices_enriched.collect()
         local_edges = edges.collect()
 
+        # Eléments du dashboard Cytoscape à envoyer
         cytoscape_elements: list[dict[str, Any]] = []
 
         for row in local_vertices:
@@ -107,12 +129,14 @@ def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
                 "data": {"source": row["src"], "target": row["dst"], "action": row["action"]}
             })
 
+        # JSON des éléments à envoyer au processus dash
         payload = {
             "elements": cytoscape_elements,
             "vertex_count": len(local_vertices),
             "edge_count": len(local_edges)
         }
 
+        # Envoi des données au processus dash en utilisant la file inter-processus
         if output_queue is not None:
             try:
                 output_queue.put_nowait(payload)
@@ -128,13 +152,20 @@ def make_process_batch_graph(output_queue: Queue[dict[str, Any]] | None):
     return process_batch_graph
 
 
-def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
+def make_process_batch_window_stats():
+    """Retourne la fonction qui permet d'analyser un batch pour les statistiques temporelles."""
+
     def process_batch_window_stats(batch_df: DataFrame, batch_id: int):
+        """Fonction qui permet d'analyser un batch pour produire les statistiques des fenêtres.
+
+        Prend en paramètre le DataFrame du batch et l'id du batch"""
+
         if batch_df.isEmpty():
             return
 
         print(f"\n--- [Batch {batch_id}] Agrégation temporelle des interactions ---")
 
+        # Récupère les lignes agrégées et les trie pour construire les fenêtres.
         window_rows = (
             batch_df
             .orderBy("window", "action_type")
@@ -142,8 +173,10 @@ def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
         )
 
         windows: list[dict[str, Any]] = []
+        # Agrège les actions pour chaque fenêtre
         actions_by_window: dict[tuple[str, str], dict[str, Any]] = {}
 
+        # Récupère les statistiques des fenêtres depuis les données reçues
         for row in window_rows:
             window_start = row["window"]["start"].isoformat()
             window_end = row["window"]["end"].isoformat()
@@ -165,17 +198,20 @@ def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
         windows = [actions_by_window[key] for key in sorted(actions_by_window)]
 
         try:
+            # Crée le dossier de sortie des métriques si nécessaire.
             METRICS_DIR.mkdir(parents=True, exist_ok=True)
         except Exception as exc:
             print(f"[WARN] Impossible de créer le dossier {METRICS_DIR}: {exc}")
             return
 
+        # Ecrit les fenêtres
         for window_payload in windows:
-            # Deterministic name so each time window maps to one file.
+            # Génère un nom déterministe pour associer chaque fenêtre à un fichier.
             safe_start = window_payload["window_start"].replace(":", "-")
             safe_end = window_payload["window_end"].replace(":", "-")
             file_path = METRICS_DIR / f"window_{safe_start}__{safe_end}.json"
 
+            # Ecrit les statistiques dans un fichier JSON
             try:
                 file_path.write_text(
                     json.dumps(window_payload, ensure_ascii=False, indent=2),
@@ -188,15 +224,20 @@ def make_process_batch_window_stats(output_queue: Queue[dict[str, Any]] | None):
 
 
 def stop_queries_after(delay: float, queries: list[StreamingQuery]):
+    """Permet d'arrêter toutes les requêtes après un délai donné"""
+
     time.sleep(delay)
     for query in queries:
         query.stop()
 
 
 def spark_core(delay: float | None = None, queue: Queue[dict[str, Any]] | None = None):
-    process_batch_graph = make_process_batch_graph(queue)
-    process_batch_window_stats = make_process_batch_window_stats(queue)
+    """Fonction principale du noyau Spark"""
 
+    process_batch_graph = make_process_batch_graph(queue)
+    process_batch_window_stats = make_process_batch_window_stats()
+
+    # Requête d'écriture des graphes
     graph_writer = (
         df
         .writeStream
@@ -205,6 +246,7 @@ def spark_core(delay: float | None = None, queue: Queue[dict[str, Any]] | None =
         .outputMode("append")
     )
 
+    # Dataframe des statistiques des fenêtres
     windowed_metrics = (
         df
         .withWatermark("timestamp", WATERMARK_DELAY)
@@ -212,6 +254,7 @@ def spark_core(delay: float | None = None, queue: Queue[dict[str, Any]] | None =
         .count()
     )
 
+    # Requête d'écriture des statistiques des fenêtres
     metrics_writer = (
         windowed_metrics
         .writeStream
@@ -220,6 +263,7 @@ def spark_core(delay: float | None = None, queue: Queue[dict[str, Any]] | None =
         .outputMode("update")
     )
 
+    # On lance les requêtes
     graph_query = graph_writer.start()
     metrics_query = metrics_writer.start()
 
